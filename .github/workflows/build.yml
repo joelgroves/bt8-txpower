@@ -43,7 +43,8 @@ jobs:
         run: |
           ./scripts/feeds update base
           ./scripts/feeds install kmod-mt7996e
-          mt76=feeds/base/package/kernel/mt76
+          mt76=$(dirname "$(find feeds/base/ -path '*/kernel/mt76/Makefile' | head -1)")
+          echo "mt76 package dir: $mt76"
           grep -E 'PKG_SOURCE_(DATE|VERSION)|PKG_RELEASE' $mt76/Makefile
           mkdir -p $mt76/patches
           cp ../patches/*.patch $mt76/patches/
