@@ -76,10 +76,10 @@ jobs:
       - name: Check the patches are in the built driver
         working-directory: sdk
         run: |
-          src=$(find build_dir -maxdepth 3 -type d -name 'mt76-*' | head -1)
-          grep -c 'UNI_TXPOWER_SKU_POWER_LIMIT_CTRL' "$src/mt7996/mcu.h" "$src/mt7996/main.c"
-          grep -q 'mt7996_mcu_set_tx_power_ctrl' "$src/mt7996/mcu.c"
-          strings $(find "$src" -name mt7996e.ko | head -1) | grep 'failed to update txpower SKU'
+          ko=$(find build_dir -path '*/.pkgdir/kmod-mt7996e/*' -name mt7996e.ko | head -1)
+          echo "Checking $ko"
+          strings "$ko" | grep 'failed to update txpower SKU'
+          strings "$ko" | grep 'failed to update txpower channel info'
 
       - name: Collect packages
         run: |
