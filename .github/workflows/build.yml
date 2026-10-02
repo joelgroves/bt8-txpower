@@ -15,6 +15,19 @@ env:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Only the two txpower patches
+          - variant: txpower
+            release: 100
+            extras: false
+          # txpower patches plus the backported roaming/throughput/stability fixes
+          - variant: txpower-stability
+            release: 101
+            extras: true
+    name: build (${{ matrix.variant }})
     steps:
       - uses: actions/checkout@v4
 
@@ -48,8 +61,12 @@ jobs:
           grep -E 'PKG_SOURCE_(DATE|VERSION)|PKG_RELEASE' $mt76/Makefile
           mkdir -p $mt76/patches
           cp ../patches/*.patch $mt76/patches/
+          if [ "${{ matrix.extras }}" = true ]; then
+            cp ../extras/*.patch $mt76/patches/
+          fi
+          ls $mt76/patches | tee ../expected-patches.txt
           # Bump the release number so apk treats this as an upgrade over -r2
-          sed -i 's/^PKG_RELEASE=.*/PKG_RELEASE=100/' $mt76/Makefile
+          sed -i 's/^PKG_RELEASE=.*/PKG_RELEASE=${{ matrix.release }}/' $mt76/Makefile
 
       - name: Configure
         working-directory: sdk
@@ -71,7 +88,10 @@ jobs:
         run: |
           set -o pipefail
           make -j$(nproc) package/feeds/base/mt76/compile V=s 2>&1 | tee build.log | tail -n 100
-          grep -E 'Applying .*/patches/09' build.log
+          applied=$(grep -cE 'Applying .*/patches/09' build.log)
+          expected=$(wc -l < ../expected-patches.txt)
+          echo "Applied $applied of $expected patches"
+          test "$applied" -eq "$expected"
 
       - name: Check the patches are in the built driver
         working-directory: sdk
@@ -91,5 +111,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: bt8-mt76-txpower-${{ env.OPENWRT_VERSION }}
+          name: bt8-mt76-${{ matrix.variant }}-${{ env.OPENWRT_VERSION }}
           path: out/

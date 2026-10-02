@@ -30,6 +30,13 @@ Two patches by Yanghan Ye, posted to linux-wireless / linux-mediatek on
 Source: <https://lists.infradead.org/pipermail/linux-mediatek/2026-June/108610.html>.
 They apply cleanly to both the mt76 in 25.12.5 (`39c960c3`) and current mt76 master.
 
+## Two builds
+
+* **txpower** (`-r100`): only the two txpower patches above.
+* **txpower-stability** (`-r101`): the txpower patches plus 48 backported
+  roaming, throughput, batman-adv and uptime fixes from `extras/`. See
+  [FINDINGS.md](FINDINGS.md) for what is in it and what was left out.
+
 ## Building
 
 The GitHub Actions workflow (`.github/workflows/build.yml`) downloads the
@@ -42,7 +49,8 @@ mt76 package, and builds:
 
 They are built against the exact release kernel, so they install on a stock
 25.12.5 image. The release number is bumped to `-r100` so they replace the
-stock `-r2` packages. Download them from the run's **Artifacts** section.
+stock `-r2` packages (`-r101` for the stability build). Download them from the
+run's **Artifacts** section.
 
 ## Installing (per node)
 

@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Joshua Klinesmith <joshuaklinesmith@gmail.com>
+Date: Mon, 6 Apr 2026 13:13:38 -0400
+Subject: [PATCH 957/957] mt7996: fix DMA mapping length for short TX frames
+
+Same bug as mt7615/mt7915: buf[1].len is overridden to
+MT_CT_PARSE_LEN (72) but the DMA mapping may be shorter,
+causing SMMU faults when hardware reads past the mapped
+region.
+
+Cap the firmware parse length to the actual mapped
+length.
+
+Signed-off-by: Joshua Klinesmith <joshuaklinesmith@gmail.com>
+(cherry picked from commit 08ea5ba8cd93973f6574de5be601b024f70c88cb)
+---
+ mt7996/mac.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mt7996/mac.c b/mt7996/mac.c
+index a1ca0d1b..fb1a4e29 100644
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -1181,7 +1181,7 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
+ 	tx_info->skb = NULL;
+ 
+ 	/* pass partial skb header to fw */
+-	tx_info->buf[1].len = MT_CT_PARSE_LEN;
++	tx_info->buf[1].len = min_t(u32, MT_CT_PARSE_LEN, tx_info->buf[1].len);
+ 	tx_info->buf[1].skip_unmap = true;
+ 	tx_info->nbuf = MT_CT_DMA_BUF_NUM;
+ 

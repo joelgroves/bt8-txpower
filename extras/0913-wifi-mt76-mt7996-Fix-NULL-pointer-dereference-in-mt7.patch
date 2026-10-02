@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Sat, 18 Apr 2026 20:04:16 +0200
+Subject: [PATCH 913/957] wifi: mt76: mt7996: Fix NULL pointer dereference in
+ mt7996_init_tx_queues()
+
+When MT76_NPU and CONFIG_NET_MEDIATEK_SOC_WED are enabled and
+mt76 detects properly the Airoha NPU SoC, mt7996_init_tx_queues() will
+dereference a NULL WED pointer.
+Fix the issue by always passing the WED pointer from mt7996_dma_init().
+
+Fixes: cd7951f242a7 ("wifi: mt76: mt7996: Integrate MT7990 dma configuration for NPU")
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+Link: https://patch.msgid.link/20260418-mt7996-dma-init-npu-fix-v1-1-6b8dcffbcb57@kernel.org
+(cherry picked from commit 58331e62df806f8933cc9e367b1d30598e1969e6)
+---
+ mt7996/dma.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mt7996/dma.c b/mt7996/dma.c
+index 8f5d297d..3d935381 100644
+--- a/mt7996/dma.c
++++ b/mt7996/dma.c
+@@ -683,7 +683,7 @@ int mt7996_dma_init(struct mt7996_dev *dev)
+ 		ret = mt7996_init_tx_queues(&dev->phy, MT_TXQ_ID(0),
+ 					    MT7996_NPU_TX_RING_SIZE,
+ 					    MT_TXQ_RING_BASE(0) + hif1_ofs,
+-					    NULL);
++					    wed);
+ 	else
+ 		ret = mt7996_init_tx_queues(&dev->phy,
+ 					    MT_TXQ_ID(dev->mphy.band_idx),

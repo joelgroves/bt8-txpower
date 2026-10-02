@@ -1,0 +1,46 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Joshua Klinesmith <joshuaklinesmith@gmail.com>
+Date: Mon, 6 Apr 2026 12:18:09 -0400
+Subject: [PATCH 956/957] mt7996: add WCID bounds check to prevent panic
+
+Same class of bug as mt7915: the mt7996 driver does not
+validate WCID indices from TX free events or TX status
+reports before WTBL lookups. An out-of-range WCID causes
+invalid MMIO accesses leading to a kernel data abort.
+
+Add bounds checks in mt7996_mac_tx_free() and
+mt7996_mac_add_txs() to match the pattern used by
+mt7615, mt7921, and mt7925 drivers.
+
+Fixes: #998
+
+Signed-off-by: Joshua Klinesmith <joshuaklinesmith@gmail.com>
+(cherry picked from commit b7619dab0fd19abd13ab56fee262987f2a1c29e9)
+---
+ mt7996/mac.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/mt7996/mac.c b/mt7996/mac.c
+index 2e64444e..a1ca0d1b 100644
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -1368,6 +1368,9 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+ 			u16 idx;
+ 
+ 			idx = FIELD_GET(MT_TXFREE_INFO_WLAN_ID, info);
++			if (idx >= mt7996_wtbl_size(dev))
++				goto next;
++
+ 			wcid = mt76_wcid_ptr(dev, idx);
+ 			sta = wcid_to_sta(wcid);
+ 			if (!sta) {
+@@ -1604,6 +1607,9 @@ static void mt7996_mac_add_txs(struct mt7996_dev *dev, void *data)
+ 	u8 pid;
+ 
+ 	wcidx = le32_get_bits(txs_data[2], MT_TXS2_WCID);
++	if (wcidx >= mt7996_wtbl_size(dev))
++		return;
++
+ 	pid = le32_get_bits(txs_data[3], MT_TXS3_PID);
+ 
+ 	if (pid < MT_PACKET_ID_NO_SKB)
