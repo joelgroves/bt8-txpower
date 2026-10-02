@@ -1,0 +1,83 @@
+name: Build patched mt76 for ASUS ZenWiFi BT8
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      openwrt_version:
+        description: OpenWrt release to build against
+        default: "25.12.5"
+
+env:
+  OPENWRT_VERSION: ${{ github.event.inputs.openwrt_version || '25.12.5' }}
+  TARGET: mediatek/filogic
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses-dev libssl-dev \
+            python3-setuptools rsync swig unzip zlib1g-dev file wget zstd
+
+      - name: Download the official OpenWrt SDK
+        run: |
+          base="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/${TARGET}"
+          wget -q "$base/sha256sums"
+          sdk=$(grep -oE 'openwrt-sdk-[^ ]+\.tar\.(zst|xz)' sha256sums | head -1)
+          echo "SDK: $sdk"
+          wget -q "$base/$sdk"
+          grep " \*\?$sdk\$" sha256sums | sed 's/ \*/  /' | sha256sum -c -
+          mkdir sdk
+          tar -xf "$sdk" -C sdk --strip-components=1
+          # Record which mt76 the release shipped with, for the build log
+          grep -h 'mt76' sdk/feeds.conf.default || true
+
+      - name: Fetch feeds and add the txpower patches to mt76
+        working-directory: sdk
+        run: |
+          ./scripts/feeds update base
+          ./scripts/feeds install kmod-mt7996e
+          mt76=feeds/base/package/kernel/mt76
+          grep -E 'PKG_SOURCE_(DATE|VERSION)|PKG_RELEASE' $mt76/Makefile
+          mkdir -p $mt76/patches
+          cp ../patches/*.patch $mt76/patches/
+          # Bump the release number so apk treats this as an upgrade over -r2
+          sed -i 's/^PKG_RELEASE=.*/PKG_RELEASE=100/' $mt76/Makefile
+
+      - name: Configure
+        working-directory: sdk
+        run: |
+          cat > .config <<'EOF'
+          CONFIG_PACKAGE_kmod-mt7996e=m
+          CONFIG_PACKAGE_kmod-mt76-core=m
+          CONFIG_PACKAGE_kmod-mt76-connac=m
+          CONFIG_ALL_NONSHARED=n
+          CONFIG_ALL_KMODS=n
+          CONFIG_ALL=n
+          CONFIG_SIGNED_PACKAGES=n
+          EOF
+          sed -i 's/^ *//' .config
+          make defconfig
+
+      - name: Build mt76
+        working-directory: sdk
+        run: make -j$(nproc) package/feeds/base/mt76/compile V=s 2>&1 | tail -n 200
+
+      - name: Collect packages
+        run: |
+          mkdir out
+          find sdk/bin -type f \( -name 'kmod-mt76-core*' -o -name 'kmod-mt76-connac*' \
+            -o -name 'kmod-mt7996e*' \) -exec cp {} out/ \;
+          ls -l out
+          test -n "$(ls out)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bt8-mt76-txpower-${{ env.OPENWRT_VERSION }}
+          path: out/
