@@ -68,7 +68,18 @@ jobs:
 
       - name: Build mt76
         working-directory: sdk
-        run: make -j$(nproc) package/feeds/base/mt76/compile V=s 2>&1 | tail -n 200
+        run: |
+          set -o pipefail
+          make -j$(nproc) package/feeds/base/mt76/compile V=s 2>&1 | tee build.log | tail -n 100
+          grep -E 'Applying .*/patches/09' build.log
+
+      - name: Check the patches are in the built driver
+        working-directory: sdk
+        run: |
+          src=$(find build_dir -maxdepth 3 -type d -name 'mt76-*' | head -1)
+          grep -c 'UNI_TXPOWER_SKU_POWER_LIMIT_CTRL' "$src/mt7996/mcu.h" "$src/mt7996/main.c"
+          grep -q 'mt7996_mcu_set_tx_power_ctrl' "$src/mt7996/mcu.c"
+          strings $(find "$src" -name mt7996e.ko | head -1) | grep 'failed to update txpower SKU'
 
       - name: Collect packages
         run: |
