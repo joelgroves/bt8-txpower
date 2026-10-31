@@ -30,10 +30,20 @@ Two patches by Yanghan Ye, posted to linux-wireless / linux-mediatek on
 Source: <https://lists.infradead.org/pipermail/linux-mediatek/2026-June/108610.html>.
 They apply cleanly to both the mt76 in 25.12.5 (`39c960c3`) and current mt76 master.
 
+## EHT RX PN fix (2026-10-31)
+
+`patches/0971-...find-the-802.11-header-behind-EHT-radiotap-TLVs.patch`:
+for EHT (Wi-Fi 7) frames `mt76_skb_get_hdr()` returned the EHT radiotap TLV
+instead of the 802.11 header, so `mt76_check_ccmp_pn()` checked every EHT
+data frame against the management-frame replay counter. Frames of different
+TIDs shared one PN counter and were silently dropped (`RX_FLAG_ONLY_MONITOR`)
+when released out of PN order. On the 6 GHz EHT mesh this lost 13-60% of the
+rear-to-house traffic; with the fix it is 0%. Not yet fixed upstream.
+
 ## Two builds
 
-* **txpower** (`-r100`): only the two txpower patches above.
-* **txpower-stability** (`-r101`): the txpower patches plus 48 backported
+* **txpower** (`-r108`): the two txpower patches above plus the EHT PN fix (0971).
+* **txpower-stability** (`-r109`): the txpower patches and the EHT PN fix plus 48 backported
   roaming, throughput, batman-adv and uptime fixes from `extras/`. See
   [FINDINGS.md](FINDINGS.md) for what is in it and what was left out.
 
@@ -48,8 +58,8 @@ mt76 package, and builds:
 * `kmod-mt7996e`
 
 They are built against the exact release kernel, so they install on a stock
-25.12.5 image. The release number is bumped to `-r100` so they replace the
-stock `-r2` packages (`-r101` for the stability build). Download them from the
+25.12.5 image. The release number is bumped to `-r108` so they replace the
+stock `-r2` packages (`-r109` for the stability build). Download them from the
 run's **Artifacts** section.
 
 ## Installing (per node)
@@ -66,7 +76,7 @@ apk add --allow-untrusted /tmp/kmod-mt76-core-*.apk /tmp/kmod-mt76-connac-*.apk 
 reboot
 ```
 
-After the reboot, `apk info -v | grep kmod-mt7996e` should show `-r100`.
+After the reboot, `apk info -v | grep kmod-mt7996e` should show `-r108` (or `-r109`).
 
 ## Testing
 
