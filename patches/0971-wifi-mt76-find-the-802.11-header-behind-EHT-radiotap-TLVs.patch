@@ -1,0 +1,58 @@
+From: Joel Groves <happygreentreefrog@gmail.com>
+Subject: [PATCH] wifi: mt76: find the 802.11 header behind EHT radiotap TLVs
+
+mt76_connac3_mac_decode_eht_radiotap() pushes the EHT and U-SIG radiotap
+TLVs in front of the 802.11 header and sets RX_FLAG_RADIOTAP_TLV_AT_END,
+leaving mac_header pointing at the header. mt76_skb_get_hdr() only skips
+the HE radiotap structs, so for EHT frames it returns the first TLV.
+The TLV type (0x0021) then reads as the frame control of a management
+frame without ToDS.
+
+mt76_check_ccmp_pn() therefore checks every EHT-received data frame
+against the robust management frame replay counter instead of the
+per-TID one. Frames from different TIDs share one PN counter, and
+whenever a lower-priority TID is delivered after a higher one with a
+newer PN, its frames are marked RX_FLAG_ONLY_MONITOR and disappear
+without any counter. On a BT8 6 GHz EHT mesh this lost 30-60% of the
+rear-to-house traffic; a diagnostic build showed 3778 PN check failures
+in 60 s, all in the management slot (security_idx 16) for aggregated
+data frames.
+
+Return mac_header when the TLVs are present. Use the same header
+pointer for the A-MSDU first subframe check, which also assumed the
+header starts at skb->data.
+
+---
+diff --git a/mac80211.c b/mac80211.c
+index eaaefb6..802f7ca 100644
+--- a/mac80211.c
++++ b/mac80211.c
+@@ -901,7 +901,10 @@ static void mt76_rx_release_amsdu(struct mt76_phy *phy, enum mt76_rxq_id q)
+ 		int offset = 0;
+ 
+ 		if (!(status->flag & RX_FLAG_8023)) {
+-			offset = ieee80211_get_hdrlen_from_skb(skb);
++			struct ieee80211_hdr *hdr = mt76_skb_get_hdr(skb);
++
++			offset = (u8 *)hdr - skb->data +
++				 ieee80211_hdrlen(hdr->frame_control);
+ 
+ 			if ((status->flag &
+ 			     (RX_FLAG_DECRYPTED | RX_FLAG_IV_STRIPPED)) ==
+diff --git a/mt76.h b/mt76.h
+index 563dfc7..631cb6e 100644
+--- a/mt76.h
++++ b/mt76.h
+@@ -1463,6 +1463,12 @@ static inline void *mt76_skb_get_hdr(struct sk_buff *skb)
+ 
+ 	mstat = *((struct mt76_rx_status *)skb->cb);
+ 
++	/* EHT radiotap TLVs are pushed in front of the 802.11 header and
++	 * mac_header is left pointing at the header itself.
++	 */
++	if (mstat.flag & RX_FLAG_RADIOTAP_TLV_AT_END)
++		return skb_mac_header(skb);
++
+ 	if (mstat.flag & RX_FLAG_RADIOTAP_HE)
+ 		data += sizeof(struct ieee80211_radiotap_he);
+ 	if (mstat.flag & RX_FLAG_RADIOTAP_HE_MU)
