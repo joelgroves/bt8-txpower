@@ -21,11 +21,11 @@ jobs:
         include:
           # Only the two txpower patches
           - variant: txpower
-            release: 102
+            release: 104
             extras: false
           # txpower patches plus the backported roaming/throughput/stability fixes
           - variant: txpower-stability
-            release: 103
+            release: 105
             extras: true
     name: build (${{ matrix.variant }})
     steps:
@@ -118,7 +118,7 @@ jobs:
   # signing in to GitHub (workflow artifacts need a login).
   release:
     needs: build
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/pn-replay-fix'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/pn-replay-fix' || github.ref == 'refs/heads/rx-drop-diag'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
