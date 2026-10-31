@@ -1,0 +1,40 @@
+From: Joel Groves <happygreentreefrog@gmail.com>
+Subject: [PATCH] wifi: mt76: mt7996: keep the TID for the RX PN replay check
+
+mt76_check_ccmp_pn() picks the per-TID replay counter from
+status->qos_ctl. mt7996_mac_fill_rx() only sets qos_ctl after an early
+return that is taken for frames already reordered by hardware RRO
+(hw_aggr), so for those frames qos_ctl stays 0 and every TID is checked
+against the TID 0 counter. When TID 0 traffic (e.g. video) has advanced
+that counter, valid frames on other TIDs (e.g. background, TID 2) are
+dropped as replays. Seen as one-way packet loss across a BT8-to-BT8
+batman-adv mesh that grows with load.
+
+Set qos_ctl for every QoS data frame before the early return.
+
+---
+diff --git a/mt7996/mac.c b/mt7996/mac.c
+index f7694faf..93ae339d 100644
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -697,12 +697,18 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
+ 		}
+ 	}
+ 
++	/* The TID is also needed for the per-TID CCMP PN replay check in
++	 * mt76_check_ccmp_pn(), including for frames already reordered by
++	 * hardware RRO. Without it every frame is checked against the TID 0
++	 * counter and lower-priority TIDs are dropped as replays.
++	 */
++	if (ieee80211_is_data_qos(fc))
++		status->qos_ctl = qos_ctl;
++
+ 	if (!status->wcid || !ieee80211_is_data_qos(fc) || hw_aggr)
+ 		return 0;
+ 
+ 	status->aggr = unicast &&
+ 		       !ieee80211_is_qos_nullfunc(fc);
+-	status->qos_ctl = qos_ctl;
+ 	status->seqno = IEEE80211_SEQ_TO_SN(seq_ctrl);
+ 
+ 	return 0;

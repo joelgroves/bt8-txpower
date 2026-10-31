@@ -21,11 +21,11 @@ jobs:
         include:
           # Only the two txpower patches
           - variant: txpower
-            release: 100
+            release: 102
             extras: false
           # txpower patches plus the backported roaming/throughput/stability fixes
           - variant: txpower-stability
-            release: 101
+            release: 103
             extras: true
     name: build (${{ matrix.variant }})
     steps:
@@ -118,7 +118,7 @@ jobs:
   # signing in to GitHub (workflow artifacts need a login).
   release:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/pn-replay-fix'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -132,6 +132,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           tag="openwrt-${OPENWRT_VERSION}"
+          # Test builds from the fix branch go to their own pre-release
+          extra=""
+          if [ "$GITHUB_REF_NAME" != main ]; then
+            tag="$tag-$GITHUB_REF_NAME"
+            extra="--prerelease --target $GITHUB_SHA"
+          fi
           mkdir upload
           for d in dist/*/; do
             v=$(basename "$d")
@@ -140,6 +146,6 @@ jobs:
           cp dist/bt8-mt76-txpower-stability-*/*.apk upload/
           ls -l upload
           gh release view "$tag" >/dev/null 2>&1 ||
-            gh release create "$tag" --title "Packages for OpenWrt ${OPENWRT_VERSION}" \
-              --notes "Built from ${GITHUB_SHA}. Install the three .apk files (txpower-stability, -r101) or one of the zips. See README.md."
+            gh release create "$tag" $extra --title "Packages for OpenWrt ${OPENWRT_VERSION}" \
+              --notes "Built from ${GITHUB_SHA}. Install the three .apk files (txpower-stability) or one of the zips. See README.md."
           gh release upload "$tag" upload/* --clobber
